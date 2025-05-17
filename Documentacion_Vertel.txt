@@ -1,0 +1,176 @@
+DOCUMENTACIÓN DEL SISTEMA DE BASE DE DATOS 'vertel'
+
+INSTRUCCIONES DE CREACIÓN DE LA BASE DE DATOS
+
+-- Comentario: Se crea una base de datos con nombre 'vertel', solo si no existe aún.
+CREATE DATABASE IF NOT EXISTS vertel;
+-- Palabra clave: CREATE DATABASE = instrucción para crear una nueva base de datos.
+-- IF NOT EXISTS = condición que evita error si la base de datos ya existe.
+
+-- Se selecciona la base de datos 'vertel' para que las siguientes operaciones se ejecuten dentro de ella.
+USE vertel;
+-- Palabra clave: USE = selecciona una base de datos activa para trabajar sobre ella.
+
+CREACIÓN DE LAS TABLAS
+
+-- TABLA PROVEEDORES
+CREATE TABLE Proveedores (
+    id_proveedor INT PRIMARY KEY AUTO_INCREMENT,
+    -- id_proveedor: clave primaria (PRIMARY KEY), valor entero (INT) que se incrementa automáticamente (AUTO_INCREMENT)
+    nombre VARCHAR(100) NOT NULL,
+    -- nombre: cadena de caracteres de hasta 100, obligatorio (NOT NULL)
+    contacto VARCHAR(100)
+    -- contacto: cadena opcional
+);
+
+-- TABLA ARTICULOS (INVENTARIO)
+CREATE TABLE Articulos (
+    id_articulo INT PRIMARY KEY AUTO_INCREMENT,
+    descripcion TEXT NOT NULL,
+    -- descripcion: campo de texto largo obligatorio
+    precio DECIMAL(10,2) NOT NULL,
+    -- precio: número decimal de hasta 10 dígitos totales, 2 decimales, obligatorio
+    stock INT DEFAULT 0,
+    -- stock: entero con valor por defecto 0
+    id_proveedor INT,
+    -- id_proveedor: referencia a proveedor
+    FOREIGN KEY (id_proveedor) REFERENCES Proveedores(id_proveedor)
+    -- establece clave foránea que conecta con Proveedores
+);
+
+-- TABLA CLIENTES
+CREATE TABLE Clientes (
+    id_cliente INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    categoria VARCHAR(50) CHECK (categoria IN ('Minorista', 'Mayorista', 'Corporativo')),
+    -- categoria: restringe valores permitidos a solo esos tres
+    contacto VARCHAR(100)
+);
+
+-- TABLA VENTAS
+CREATE TABLE Ventas (
+    id_venta INT PRIMARY KEY AUTO_INCREMENT,
+    id_cliente INT,
+    fecha DATE NOT NULL,
+    metodo_pago VARCHAR(50) CHECK (metodo_pago IN ('Efectivo', 'Tarjeta', 'Transferencia')),
+    total DECIMAL(10,2),
+    FOREIGN KEY (id_cliente) REFERENCES Clientes(id_cliente)
+);
+
+-- TABLA DETALLEVENTA
+CREATE TABLE DetalleVenta (
+    id_detalle INT PRIMARY KEY AUTO_INCREMENT,
+    id_venta INT,
+    id_articulo INT,
+    cantidad INT,
+    precio_unitario DECIMAL(10,2),
+    FOREIGN KEY (id_venta) REFERENCES Ventas(id_venta),
+    FOREIGN KEY (id_articulo) REFERENCES Articulos(id_articulo)
+);
+
+-- TABLA COMPRASPROVEEDORES
+CREATE TABLE ComprasProveedores (
+    id_compra INT PRIMARY KEY AUTO_INCREMENT,
+    id_proveedor INT,
+    fecha DATE NOT NULL,
+    monto_total DECIMAL(10,2),
+    FOREIGN KEY (id_proveedor) REFERENCES Proveedores(id_proveedor)
+);
+
+-- TABLA DETALLECOMPRA
+CREATE TABLE DetalleCompra (
+    id_detalle INT PRIMARY KEY AUTO_INCREMENT,
+    id_compra INT,
+    id_articulo INT,
+    cantidad INT,
+    precio_unitario DECIMAL(10,2),
+    FOREIGN KEY (id_compra) REFERENCES ComprasProveedores(id_compra),
+    FOREIGN KEY (id_articulo) REFERENCES Articulos(id_articulo)
+);
+
+-- TABLA PAGOSPROVEEDORES
+CREATE TABLE PagosProveedores (
+    id_pago INT PRIMARY KEY AUTO_INCREMENT,
+    id_compra INT UNIQUE,
+    monto DECIMAL(10,2) NOT NULL,
+    fecha_maxima DATE,
+    FOREIGN KEY (id_compra) REFERENCES ComprasProveedores(id_compra)
+);
+
+-- TABLA EMPLEADOS
+CREATE TABLE Empleados (
+    id_empleado INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    puesto VARCHAR(50),
+    salario DECIMAL(10,2),
+    fecha_contratacion DATE
+);
+
+CONSULTAS
+
+-- a. Inventario por stock
+SELECT id_articulo, descripcion, stock FROM Articulos WHERE stock > 0;
+-- SELECT: extrae columnas id_articulo, descripcion y stock
+-- FROM: de la tabla Articulos
+-- WHERE: condición para filtrar stock mayor a 0
+
+-- b. Ventas por fecha
+SELECT V.id_venta, C.nombre AS cliente, V.fecha, V.metodo_pago, V.total
+FROM Ventas V
+INNER JOIN Clientes C ON V.id_cliente = C.id_cliente
+WHERE V.fecha BETWEEN '2025-05-01' AND '2025-05-15';
+-- INNER JOIN: conecta ventas con clientes
+-- WHERE BETWEEN: filtra fechas en rango
+
+-- Por cliente
+SELECT V.id_venta, C.nombre AS cliente, V.fecha, V.total
+FROM Ventas V
+INNER JOIN Clientes C ON V.id_cliente = C.id_cliente
+WHERE C.nombre LIKE '%Tech%';
+-- LIKE: busca coincidencias parciales
+
+-- Por método de pago
+SELECT id_venta, fecha, metodo_pago, total FROM Ventas WHERE metodo_pago = 'Tarjeta';
+
+-- c. Clientes por categoría
+SELECT nombre, categoria, contacto FROM Clientes WHERE categoria = 'Corporativo';
+
+-- d. Compras a proveedores por proveedor
+SELECT P.nombre AS proveedor, CP.fecha, CP.monto_total
+FROM ComprasProveedores CP
+INNER JOIN Proveedores P ON CP.id_proveedor = P.id_proveedor
+WHERE P.id_proveedor = 1;
+
+-- Por fecha
+SELECT P.nombre, CP.fecha, CP.monto_total
+FROM ComprasProveedores CP
+INNER JOIN Proveedores P ON CP.id_proveedor = P.id_proveedor
+WHERE CP.fecha = '2025-04-15';
+
+-- e. Artículos con proveedor
+SELECT A.descripcion, A.precio, P.nombre AS proveedor
+FROM Articulos A
+INNER JOIN Proveedores P ON A.id_proveedor = P.id_proveedor;
+
+-- f. Pagos pendientes
+SELECT PP.id_pago, P.nombre AS proveedor, PP.monto, PP.fecha_maxima
+FROM PagosProveedores PP
+INNER JOIN ComprasProveedores CP ON PP.id_compra = CP.id_compra
+INNER JOIN Proveedores P ON CP.id_proveedor = P.id_proveedor
+WHERE PP.fecha_maxima > CURDATE();
+-- CURDATE(): devuelve la fecha actual del sistema
+
+-- g. Empleados ordenados por salario
+SELECT nombre, puesto, salario FROM Empleados ORDER BY salario DESC;
+-- ORDER BY: ordena de mayor a menor salario
+
+CONCLUSIÓN
+Con esta documentación ultra detallada se ha dejado evidencia clara y precisa de la estructura,
+funcionamiento y propósito de cada uno de los elementos que conforman el sistema de base de datos Vertel.
+Se han explicado minuciosamente todas las sentencias SQL, sus palabras clave, restricciones, relaciones
+y consultas, garantizando una comprensión completa y estructurada del sistema.
+
+Además, es importante señalar que esta versión incorpora todas las mejoras, ajustes y optimizaciones
+necesarias para cubrir de forma eficiente los requerimientos planteados por la empresa. Por lo tanto, se
+establece y reconoce esta versión como la versión final y oficial de la documentación, quedando lista
+para ser implementada, utilizada y consultada en futuras actualizaciones o mantenimientos del sistema.
